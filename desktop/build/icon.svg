@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    Hatch app icon (placeholder).
+    Composition: a near-black rounded square with the playful monpaco shape
+    vocabulary — mustard slab, cobalt half-circle, rose disc, vermilion
+    quarter-arc — orbiting an italic serif "H" in cream.
+  -->
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#1A1815"/>
+
+  <!-- mustard slab, top-left -->
+  <rect x="84" y="86" width="80" height="40" fill="#D4A82B"/>
+
+  <!-- cobalt half circle, mid-left -->
+  <path d="M150 200 a90 90 0 0 1 0 180 z" fill="#3D52E2"/>
+
+  <!-- rose disc, top-right -->
+  <circle cx="380" cy="170" r="74" fill="#F5B9C9"/>
+
+  <!-- vermilion quarter, bottom-right -->
+  <path d="M310 410 a90 90 0 0 1 0 -180 l0 180 z" fill="#E33627"/>
+  <circle cx="310" cy="320" r="18" fill="#1A1815"/>
+
+  <!-- italic serif H -->
+  <text
+    x="256"
+    y="345"
+    text-anchor="middle"
+    font-family="'EB Garamond', Georgia, serif"
+    font-style="italic"
+    font-weight="500"
+    font-size="280"
+    fill="#F5F1EA">H</text>
+</svg>

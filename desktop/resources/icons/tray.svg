@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    Tray icon — silhouette-style. Trays render at 16-22px on Windows, 22px on
+    Mac (template-image-aware). We use a single near-black square with the
+    italic H, plus a tiny mustard accent so it reads as Hatch even at 16px.
+  -->
+  <rect x="0" y="0" width="32" height="32" rx="6" fill="#1A1815"/>
+  <rect x="6" y="6" width="6" height="3" fill="#D4A82B"/>
+  <text
+    x="16"
+    y="24"
+    text-anchor="middle"
+    font-family="'EB Garamond', Georgia, serif"
+    font-style="italic"
+    font-weight="500"
+    font-size="20"
+    fill="#F5F1EA">H</text>
+</svg>

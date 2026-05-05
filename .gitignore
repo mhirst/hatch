@@ -1,0 +1,56 @@
+# Go
+daemon/hatchd
+daemon/hatchd.exe
+*.test
+*.out
+
+# Node
+node_modules/
+dist/
+out/
+.next/
+*.log
+
+# Stale TS-emitted siblings — these silently win Vite resolution over .ts/.tsx.
+# Source is TS-only; .js under src/ is always wrong.
+desktop/src/**/*.js
+desktop/src/**/*.cjs
+desktop/src/**/*.d.ts
+!desktop/src/renderer/vite-env.d.ts
+web/src/**/*.js
+web/src/**/*.cjs
+web/src/**/*.d.ts
+!web/src/vite-env.d.ts
+
+# Web build
+web/dist/
+daemon/web/dist/*
+!daemon/web/dist/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+*.local
+
+# Hatch local state
+.hatch/
+hatch.db
+
+# Bundled daemon binary — built per-platform by CI / build:daemon, not source.
+desktop/resources/bin/hatchd
+desktop/resources/bin/hatchd.exe
+# Generated icon assets — built per-platform by build:icons.
+desktop/build/icon.png
+desktop/build/icon.ico
+desktop/resources/icons/tray.png
+
+# Packaged installers
+desktop/dist/
+
+# IDE
+.vscode/
+.idea/

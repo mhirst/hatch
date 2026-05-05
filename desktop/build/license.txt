@@ -1,0 +1,18 @@
+Hatch — local-first app sharing for teams.
+
+This is an early prototype. By installing Hatch you acknowledge:
+
+- Hatch runs a local daemon (hatchd) on your machine.
+- It builds Docker containers for the app folders you ask it to deploy.
+- It uses Tailscale to make those containers reachable to teammates you
+  explicitly grant access to.
+- Hatch stores app names, container IDs, and access grants in a local SQLite
+  database under your user data folder. Your reporting data never leaves your
+  laptop.
+- Source code is provided as-is, without warranty of any kind.
+
+Hatch does not collect telemetry. Logs stay on your machine.
+
+You may terminate use at any time by quitting the app and removing the
+installation folder; the local data folder can be removed separately if
+desired.

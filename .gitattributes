@@ -1,0 +1,22 @@
+# Normalize all text files to LF in the repo. Windows checkouts get CRLF
+# automatically (core.autocrlf=true), so this is purely a "what's stored in
+# git" rule. Without it, contributors on different OSes generate noisy
+# whitespace diffs.
+* text=auto eol=lf
+
+# Shell scripts must be LF or they break on Unix.
+*.sh text eol=lf
+*.mjs text eol=lf
+
+# Windows batch / PowerShell stays CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary types — never normalize.
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.dmg binary
+*.exe binary
+*.zip binary

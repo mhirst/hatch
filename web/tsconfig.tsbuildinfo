@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/deeplinkdeploy.tsx","./src/components/logviewer.tsx","./src/components/settings.tsx","./src/components/ui.tsx","./src/lib/api.ts","./src/lib/firebase.ts"],"version":"5.9.3"}
