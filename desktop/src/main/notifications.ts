@@ -7,18 +7,11 @@
  * grants/revokes; richer per-request access events would need a daemon-side
  * /events SSE stream — slated for v2.
  */
-import type Store from "electron-store";
 import type { Daemon } from "./daemon.js";
-
-interface Settings {
-  notifyOnAccess: boolean;
-  autoStart: boolean;
-  daemonPort: number;
-}
+import { settings } from "./settings.js";
 
 interface Opts {
   daemon: Daemon;
-  settings: Store<Settings>;
   onEvent: (e: { app: string; actor: string; action: string }) => void;
 }
 
@@ -34,10 +27,16 @@ interface AccessRow {
   granted_at: number;
 }
 
-export function startAccessLogPoller({ daemon, settings, onEvent }: Opts) {
-  const seen = new Map<string, number>(); // key: `${app}:${email}` → granted_at
+const POLL_MS = 10_000;
+
+export function startAccessLogPoller({ daemon, onEvent }: Opts) {
+  // key: `${app}:${email}` → granted_at. We compare granted_at to spot
+  // re-grants (revoke + add) of the same email, which would otherwise look
+  // identical to the prior grant and silently miss a notification.
+  const seen = new Map<string, number>();
 
   let stopped = false;
+
   const tick = async () => {
     if (stopped) return;
     if (!settings.get("notifyOnAccess")) {
@@ -53,23 +52,19 @@ export function startAccessLogPoller({ daemon, settings, onEvent }: Opts) {
         for (const row of access ?? []) {
           const key = `${app.name}:${row.user_email}`;
           const prev = seen.get(key);
-          if (prev !== row.granted_at) {
-            // first observation in this session: mark seen but don't notify.
-            // This avoids a flurry of "joined" toasts on app start.
-            if (prev === undefined) {
-              seen.set(key, row.granted_at);
-            } else {
-              seen.set(key, row.granted_at);
-              onEvent({
-                app: app.name,
-                actor: row.user_email,
-                action: "was granted access",
-              });
-            }
-          }
+          if (prev === row.granted_at) continue;
+          seen.set(key, row.granted_at);
+          // Skip the warm-up: rows we see for the first time on app start
+          // shouldn't fire a barrage of toasts for grants from yesterday.
+          if (prev === undefined) continue;
+          onEvent({
+            app: app.name,
+            actor: row.user_email,
+            action: "was granted access",
+          });
         }
       }
-    } catch (err) {
+    } catch {
       // daemon may be restarting; the next tick will retry.
     } finally {
       schedule();
@@ -78,10 +73,9 @@ export function startAccessLogPoller({ daemon, settings, onEvent }: Opts) {
 
   function schedule() {
     if (stopped) return;
-    setTimeout(tick, 10_000);
+    setTimeout(tick, POLL_MS);
   }
 
-  // First tick: warm-up populates `seen` so existing rows don't notify.
   tick().catch(() => {});
 
   return () => {

@@ -39,14 +39,21 @@ jobs:
           # Node 24 — GitHub deprecates the Node 20 runtime for actions in
           # June 2026, so we pin forward now.
           node-version: '24'
+          # Cache the npm download cache keyed on desktop/package-lock.json.
+          # Saves ~30s per build once the cache is warm.
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          # Cache the Go module + build caches keyed on go.sum.
+          cache: true
+          cache-dependency-path: daemon/go.sum
 
       - name: Install desktop dependencies
         working-directory: desktop
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Build daemon (native)
         working-directory: desktop

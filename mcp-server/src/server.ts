@@ -15,9 +15,22 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 const DAEMON_URL = process.env.HATCH_DAEMON_URL ?? "http://127.0.0.1:4592";
 const DAEMON_TOKEN = process.env.HATCH_DAEMON_TOKEN ?? ""; // optional: forwarded as Bearer
+
+// MCP wants tool inputSchemas as JSON Schema. We use zod-to-json-schema and
+// strip a couple of meta keys ($schema, additionalProperties) that some MCP
+// clients don't expect at the root.
+function toolSchema(s: z.ZodObject<z.ZodRawShape>) {
+  const j = zodToJsonSchema(s, { target: "openApi3" }) as Record<string, unknown>;
+  delete j.$schema;
+  delete j.additionalProperties;
+  return j;
+}
+
+const EmptyObject = { type: "object" as const, properties: {} };
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -98,81 +111,49 @@ const tools = [
     name: "deploy_app",
     description:
       "Containerize a local project and start it on this machine. Returns a tailnet URL the owner can then share with named teammates. Idempotent: re-deploys replace the running container.",
-    inputSchema: zodToJsonSchema(DeployArgs),
+    inputSchema: toolSchema(DeployArgs),
   },
   {
     name: "share_app",
     description:
       "Grant a teammate access to a deployed app. The teammate must be on the same Tailscale tailnet to reach it.",
-    inputSchema: zodToJsonSchema(ShareArgs),
+    inputSchema: toolSchema(ShareArgs),
   },
   {
     name: "revoke_app_access",
     description: "Remove a teammate's access to an app.",
-    inputSchema: zodToJsonSchema(RevokeArgs),
+    inputSchema: toolSchema(RevokeArgs),
   },
   {
     name: "list_apps",
     description: "List apps deployed via Hatch on this machine.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: EmptyObject,
   },
   {
     name: "get_app",
     description:
       "Fetch a single app's status, URL, framework, and access list.",
-    inputSchema: zodToJsonSchema(NameOnlyArgs),
+    inputSchema: toolSchema(NameOnlyArgs),
   },
   {
     name: "update_app",
     description:
       "Rebuild and restart an app from its registered source path. Use after editing the source.",
-    inputSchema: zodToJsonSchema(NameOnlyArgs),
+    inputSchema: toolSchema(NameOnlyArgs),
   },
   {
     name: "stop_app",
     description:
       "Stop and remove an app's container. Source files are untouched; redeploy with deploy_app.",
-    inputSchema: zodToJsonSchema(NameOnlyArgs),
+    inputSchema: toolSchema(NameOnlyArgs),
   },
   {
     name: "tailscale_status",
     description:
       "Report Tailscale state (installed / running / hostname). Useful before sharing — peers can only reach apps if Tailscale is up.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: EmptyObject,
   },
 ];
-
-function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape>) {
-  // Minimal converter — MCP only needs JSON Schema's "object/properties/required".
-  const shape = schema.shape;
-  const properties: Record<string, unknown> = {};
-  const required: string[] = [];
-  for (const [key, value] of Object.entries(shape)) {
-    properties[key] = describe(value as z.ZodTypeAny);
-    if (!(value as z.ZodTypeAny).isOptional()) required.push(key);
-  }
-  return { type: "object", properties, required };
-}
-
-function describe(t: z.ZodTypeAny): Record<string, unknown> {
-  const desc = t.description;
-  const inner = unwrap(t);
-  if (inner instanceof z.ZodString)
-    return { type: "string", ...(desc ? { description: desc } : {}) };
-  if (inner instanceof z.ZodEnum)
-    return {
-      type: "string",
-      enum: inner.options,
-      ...(desc ? { description: desc } : {}),
-    };
-  return { ...(desc ? { description: desc } : {}) };
-}
-
-function unwrap(t: z.ZodTypeAny): z.ZodTypeAny {
-  if (t instanceof z.ZodOptional) return unwrap(t.unwrap());
-  if (t instanceof z.ZodDefault) return unwrap(t.removeDefault());
-  return t;
-}
 
 // ─── server ─────────────────────────────────────────────────────────────────
 

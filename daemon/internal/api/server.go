@@ -108,7 +108,7 @@ func (s *Server) requireIdentity(next http.Handler) http.Handler {
 }
 
 func contextWithIdentity(ctx context.Context, id *auth.Identity) context.Context {
-	return contextSet(ctx, ctxIdentity, id)
+	return context.WithValue(ctx, ctxIdentity, id)
 }
 
 func identityFrom(ctx context.Context) *auth.Identity {
@@ -116,11 +116,6 @@ func identityFrom(ctx context.Context) *auth.Identity {
 		return v
 	}
 	return nil
-}
-
-// thin wrapper so we don't import "context" with a value-set helper inline.
-func contextSet(ctx context.Context, key ctxKey, val any) context.Context {
-	return context.WithValue(ctx, key, val)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,11 +230,7 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	det, err := framework.Detect(abs)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	det := framework.Detect(abs)
 	if body.Framework != "" {
 		det.Kind = framework.Kind(body.Framework)
 	}

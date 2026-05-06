@@ -5,29 +5,23 @@
  * lifecycle hooks.
  */
 import { app, ipcMain, dialog, shell, BrowserWindow } from "electron";
-import type Store from "electron-store";
+import { join } from "node:path";
 import type { Daemon } from "./daemon.js";
-
-interface Settings {
-  autoStart: boolean;
-  daemonPort: number;
-  notifyOnAccess: boolean;
-}
+import { settings, type Settings, type SettingsView } from "./settings.js";
 
 interface IpcDeps {
-  settings: Store<Settings>;
   daemon: Daemon;
   mainWindow: () => BrowserWindow | null;
 }
 
-export function registerIpc({ settings, daemon, mainWindow }: IpcDeps) {
-  ipcMain.handle("settings:get", () => ({
+export function registerIpc({ daemon, mainWindow }: IpcDeps) {
+  ipcMain.handle("settings:get", (): SettingsView => ({
     autoStart: settings.get("autoStart"),
     daemonPort: settings.get("daemonPort"),
     notifyOnAccess: settings.get("notifyOnAccess"),
     appVersion: app.getVersion(),
     daemonUrl: daemon.baseUrl(),
-    logsDir: app.getPath("userData") + "/logs",
+    logsDir: logsDir(),
   }));
 
   ipcMain.handle("settings:set", (_e, patch: Partial<Settings>) => {
@@ -59,10 +53,14 @@ export function registerIpc({ settings, daemon, mainWindow }: IpcDeps) {
   });
 
   ipcMain.handle("shell:openLogs", () => {
-    shell.openPath(app.getPath("userData") + "/logs");
+    shell.openPath(logsDir());
   });
 
   ipcMain.handle("shell:openExternal", (_e, url: string) => {
     shell.openExternal(url);
   });
+}
+
+function logsDir(): string {
+  return join(app.getPath("userData"), "logs");
 }

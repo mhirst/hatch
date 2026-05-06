@@ -40,6 +40,10 @@ Thumbs.db
 .hatch/
 hatch.db
 
+# Generated Dockerfile when a project doesn't ship its own. Daemon emits
+# this into the project folder being deployed; not source.
+**/Dockerfile.hatch
+
 # Bundled daemon binary — built per-platform by CI / build:daemon, not source.
 desktop/resources/bin/hatchd
 desktop/resources/bin/hatchd.exe
@@ -54,3 +58,6 @@ desktop/dist/
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local state — task scratch, transcripts, etc.
+.claude/

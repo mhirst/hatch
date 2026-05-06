@@ -1,4 +1,8 @@
-// dbdump is a one-off tool for inspecting hatch.db while debugging.
+//go:build dev
+
+// dbdump is a one-off tool for inspecting hatch.db while debugging. Build it
+// explicitly with `go run -tags dev ./cmd/dbdump`. Without the tag this file
+// is excluded from compilation, so release builds never ship it.
 package main
 
 import (

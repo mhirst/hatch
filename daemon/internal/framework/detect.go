@@ -24,16 +24,18 @@ const (
 )
 
 type Detected struct {
-	Kind        Kind
-	Port        int
-	Entrypoint  string
-	HasDocker   bool
-	DockerPath  string
+	Kind       Kind
+	Port       int
+	Entrypoint string
+	HasDocker  bool
+	DockerPath string
 }
 
 // Detect inspects path and returns the most likely framework along with a
-// suggested port and entrypoint.
-func Detect(path string) (Detected, error) {
+// suggested port and entrypoint. The error return is reserved for I/O
+// failures; today this can't fail (we tolerate missing files), so callers
+// can ignore it.
+func Detect(path string) Detected {
 	d := Detected{Kind: KindUnknown, Port: 8080}
 
 	if hasFile(path, "Dockerfile") {
@@ -41,20 +43,27 @@ func Detect(path string) (Detected, error) {
 		d.DockerPath = filepath.Join(path, "Dockerfile")
 	}
 
+	// Order matters: the more specific Python frameworks (Streamlit, FastAPI,
+	// Flask) must lose to a more generic Python catch only if we don't see
+	// their tells in either requirements.txt or pyproject.toml.
+	pyDeps := readDeps(path)
+
 	switch {
-	case hasAny(path, "streamlit_app.py", "app.py") && containsAny(path, "requirements.txt", "streamlit"):
+	case hasAny(path, "streamlit_app.py", "app.py") && (pyDeps.has("streamlit") || hasFile(path, "requirements.txt")):
+		// Streamlit is detected when the entrypoint exists; we don't gate on
+		// `streamlit` in deps because some projects pin it transitively.
 		d.Kind = KindStreamlit
 		d.Port = 8501
 		d.Entrypoint = pickFirst(path, "streamlit_app.py", "app.py", "main.py")
-	case fileGrep(filepath.Join(path, "requirements.txt"), "fastapi"):
+	case pyDeps.has("fastapi"):
 		d.Kind = KindFastAPI
 		d.Port = 8000
 		d.Entrypoint = pickFirst(path, "main.py", "app.py")
-	case fileGrep(filepath.Join(path, "requirements.txt"), "flask"):
+	case pyDeps.has("flask"):
 		d.Kind = KindFlask
 		d.Port = 5000
 		d.Entrypoint = pickFirst(path, "app.py", "main.py")
-	case hasFile(path, "next.config.js") || hasFile(path, "next.config.mjs") || hasFile(path, "next.config.ts"):
+	case hasAny(path, "next.config.js", "next.config.mjs", "next.config.ts"):
 		d.Kind = KindNext
 		d.Port = 3000
 	case fileGrep(filepath.Join(path, "package.json"), "\"vite\""):
@@ -72,7 +81,7 @@ func Detect(path string) (Detected, error) {
 		d.Port = 80
 	}
 
-	return d, nil
+	return d
 }
 
 // Dockerfile returns a generated Dockerfile body for the detected framework.
@@ -80,10 +89,7 @@ func Detect(path string) (Detected, error) {
 func (d Detected) Dockerfile() (string, error) {
 	switch d.Kind {
 	case KindStreamlit:
-		entry := d.Entrypoint
-		if entry == "" {
-			entry = "app.py"
-		}
+		entry := fallback(d.Entrypoint, "app.py")
 		return fmt.Sprintf(`FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt ./
@@ -93,10 +99,7 @@ EXPOSE 8501
 CMD ["streamlit", "run", "%s", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
 `, entry), nil
 	case KindFastAPI:
-		entry := strings.TrimSuffix(d.Entrypoint, ".py")
-		if entry == "" {
-			entry = "main"
-		}
+		entry := strings.TrimSuffix(fallback(d.Entrypoint, "main.py"), ".py")
 		return fmt.Sprintf(`FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt ./
@@ -106,10 +109,7 @@ EXPOSE 8000
 CMD ["uvicorn", "%s:app", "--host", "0.0.0.0", "--port", "8000"]
 `, entry), nil
 	case KindFlask:
-		entry := d.Entrypoint
-		if entry == "" {
-			entry = "app.py"
-		}
+		entry := fallback(d.Entrypoint, "app.py")
 		return fmt.Sprintf(`FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt ./
@@ -150,10 +150,7 @@ EXPOSE 3000
 CMD ["npm", "start"]
 `, nil
 	case KindPython:
-		entry := d.Entrypoint
-		if entry == "" {
-			entry = "main.py"
-		}
+		entry := fallback(d.Entrypoint, "main.py")
 		return fmt.Sprintf(`FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt ./
@@ -168,7 +165,35 @@ COPY . /usr/share/nginx/html
 EXPOSE 80
 `, nil
 	}
-	return "", fmt.Errorf("unsupported framework %q — please add a Dockerfile to %s", d.Kind, "the project")
+	return "", fmt.Errorf("unsupported framework %q — please add a Dockerfile to the project", d.Kind)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// helpers
+
+// pyDeps is a tiny parsed view of a project's Python dependency manifests.
+// We don't try to be a real packaging tool — just substring-match against
+// requirements.txt + pyproject.toml so framework picks survive either layout.
+type pyDeps struct {
+	blob string // concatenated, lowercased
+}
+
+func readDeps(dir string) pyDeps {
+	var b strings.Builder
+	for _, name := range []string{"requirements.txt", "pyproject.toml"} {
+		if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
+			b.Write(data)
+			b.WriteByte('\n')
+		}
+	}
+	return pyDeps{blob: strings.ToLower(b.String())}
+}
+
+func (p pyDeps) has(pkg string) bool {
+	if p.blob == "" {
+		return false
+	}
+	return strings.Contains(p.blob, strings.ToLower(pkg))
 }
 
 func hasFile(dir, name string) bool {
@@ -194,19 +219,17 @@ func pickFirst(dir string, names ...string) string {
 	return ""
 }
 
-func containsAny(dir string, files ...string) bool {
-	for _, f := range files {
-		if hasFile(dir, f) {
-			return true
-		}
-	}
-	return false
-}
-
 func fileGrep(path, needle string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
 	return strings.Contains(strings.ToLower(string(b)), strings.ToLower(needle))
+}
+
+func fallback(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }

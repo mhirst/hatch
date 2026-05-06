@@ -12,6 +12,10 @@
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
+    // We sometimes hold references purely to keep things from being GC'd
+    // (the tray icon in main/index.ts is the canonical example). Disabling
+    // these two keeps that pattern legal; underscore-prefix the variable
+    // when intentional and the convention shows up in code review.
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,

@@ -11,13 +11,12 @@
  * web-only mode. Keeping the data plane in HTTP means the same renderer code
  * runs in browser dev mode and inside Electron with no branching.
  */
-import { app, BrowserWindow, Tray, Menu, shell, ipcMain, Notification } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, Notification } from "electron";
 // electron-updater ships as CommonJS; importing the default and destructuring
 // is the form Node's ESM loader supports. The named-import form throws at
 // startup ("SyntaxError: Named export 'autoUpdater' not found").
 import electronUpdater from "electron-updater";
 const { autoUpdater } = electronUpdater;
-import Store from "electron-store";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
@@ -26,20 +25,14 @@ import { setupTray } from "./tray.js";
 import { buildMenu } from "./menu.js";
 import { registerIpc } from "./ipc.js";
 import { startAccessLogPoller } from "./notifications.js";
+import { settings } from "./settings.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-interface Settings {
-  autoStart: boolean;
-  daemonPort: number;
-  notifyOnAccess: boolean;
-}
-const settings = new Store<Settings>({
-  defaults: { autoStart: false, daemonPort: 4592, notifyOnAccess: true },
-});
-
 let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
+// `tray` is held in this scope to keep the GC from collecting it; we never
+// read it back, hence the underscore prefix.
+let _tray: Tray | null = null;
 let daemon: Daemon | null = null;
 let quitting = false;
 
@@ -78,21 +71,19 @@ app.whenReady().then(async () => {
   await daemon.start();
 
   await createWindow();
-  tray = setupTray({
+  _tray = setupTray({
     onShow: showWindow,
     onQuit: cleanQuit,
     iconPath: trayIconPath(),
   });
   Menu.setApplicationMenu(buildMenu({ onShow: showWindow, onQuit: cleanQuit }));
 
-  registerIpc({ settings, daemon, mainWindow: () => mainWindow });
-  startAccessLogPoller({ daemon, settings, onEvent: notifyAccess });
+  registerIpc({ daemon, mainWindow: () => mainWindow });
+  startAccessLogPoller({ daemon, onEvent: notifyAccess });
 
-  // Auto-update is opt-in by default — if the user enables it and we're
-  // running a packaged build, check for updates.
-  if (!app.isPackaged) {
-    // dev mode — skip
-  } else {
+  // Auto-update only runs in packaged builds — there's nothing to update from
+  // when running `npm run dev`.
+  if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.warn("autoUpdater:", err);
     });

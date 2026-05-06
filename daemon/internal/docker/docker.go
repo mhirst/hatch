@@ -46,6 +46,10 @@ func (c *Client) Build(ctx context.Context, contextDir, dockerfile, tag string) 
 	return nil
 }
 
+// HatchLabel is attached to every container we start so cleanup tooling can
+// distinguish Hatch-managed containers from anything else the user runs.
+const HatchLabel = "io.hatch.managed=1"
+
 // Run starts a detached container from the given image, mapping containerPort
 // to a host port chosen by Docker. Returns the container ID and the host port.
 //
@@ -60,6 +64,8 @@ func (c *Client) Run(ctx context.Context, image, name string, containerPort int)
 	args := []string{
 		"run", "-d",
 		"--name", name,
+		"--label", HatchLabel,
+		"--label", "io.hatch.app=" + name,
 		"--restart", "unless-stopped",
 		"-p", fmt.Sprintf("127.0.0.1::%d", containerPort),
 		image,

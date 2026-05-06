@@ -80,16 +80,16 @@ export default function App() {
 
   if (view === "loading") return <Splash>One moment.</Splash>;
 
+  const showNav = view === "dashboard" || view === "settings" || view === "logs";
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header
         user={user}
-        onSignOut={() => signOutUser()}
         org={org}
-        onSettings={() => setView("settings")}
-        onLogs={() => setView("logs")}
-        onDashboard={() => setView("dashboard")}
-        showNav={view === "dashboard" || view === "settings" || view === "logs"}
+        showNav={showNav}
+        onNavigate={setView}
+        onSignOut={() => signOutUser()}
       />
       <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-12">
         {view === "signin" && <SignIn />}
@@ -122,25 +122,21 @@ function Splash({ children }: { children: React.ReactNode }) {
 function Header({
   user,
   org,
-  onSignOut,
-  onSettings,
-  onLogs,
-  onDashboard,
   showNav,
+  onNavigate,
+  onSignOut,
 }: {
   user: User | null;
   org: Org | null;
-  onSignOut: () => void;
-  onSettings: () => void;
-  onLogs: () => void;
-  onDashboard: () => void;
   showNav: boolean;
+  onNavigate: (view: View) => void;
+  onSignOut: () => void;
 }) {
   return (
     <header className="border-b border-ink-3">
       <div className="mx-auto w-full max-w-3xl px-6 py-5 flex items-center justify-between">
         <button
-          onClick={onDashboard}
+          onClick={() => onNavigate("dashboard")}
           className="flex items-baseline gap-3 hover:opacity-90"
           aria-label="Go to dashboard"
         >
@@ -159,10 +155,10 @@ function Header({
           <div className="flex items-center gap-4">
             {showNav && window.hatch && (
               <>
-                <button onClick={onLogs} className="text-xs text-ash hover:text-paper">
+                <button onClick={() => onNavigate("logs")} className="text-xs text-ash hover:text-paper">
                   Logs
                 </button>
-                <button onClick={onSettings} className="text-xs text-ash hover:text-paper">
+                <button onClick={() => onNavigate("settings")} className="text-xs text-ash hover:text-paper">
                   Settings
                 </button>
               </>
@@ -258,26 +254,35 @@ function SetupOrg({ onCreated }: { onCreated: (org: Org) => void }) {
   );
 }
 
-function Dashboard({ org }: { org: Org }) {
+function Dashboard({ org: _org }: { org: Org }) {
   const [apps, setApps] = useState<HatchApp[]>([]);
   const [ts, setTs] = useState<TailscaleStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [deployForm, setDeployForm] = useState<{ path: string; name: string } | null>(null);
 
+  // Two refresh paths: a silent background poll (no spinner — runs every 5s
+  // as long as the dashboard is mounted) and a user-initiated refresh that
+  // toggles `busy` so buttons disable and the spinner label shows.
+  const fetchState = async () => {
+    const [a, t] = await Promise.all([api.listApps(), api.tailscale()]);
+    setApps(a);
+    setTs(t);
+  };
+
   async function refresh() {
     setBusy(true);
     try {
-      const [a, t] = await Promise.all([api.listApps(), api.tailscale()]);
-      setApps(a);
-      setTs(t);
+      await fetchState();
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 5000);
+    fetchState().catch(() => {});
+    const id = setInterval(() => {
+      fetchState().catch(() => {});
+    }, 5000);
     return () => clearInterval(id);
   }, []);
 
