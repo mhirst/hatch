@@ -6,7 +6,20 @@
 
 > Ship the apps you build with Claude Code to your team — without leaving your laptop.
 
-**Download:** [latest installer for Windows / macOS](https://github.com/mhirst/hatch/releases/latest)
+## Install
+
+1. **Download the installer** for your OS from the [latest release](https://github.com/mhirst/hatch/releases/latest):
+   - Windows: `Hatch-Setup-X.Y.Z.exe` — past SmartScreen, click *More info → Run anyway*.
+   - macOS Apple Silicon: `Hatch-X.Y.Z-arm64.dmg`.
+   - macOS Intel: `Hatch-X.Y.Z.dmg`. First launch: right-click → *Open* to clear Gatekeeper.
+2. **Open Hatch.** It walks you through installing Docker and Tailscale (or skips Docker if you're just here to view a teammate's app). The whole setup takes about 5 minutes including the Docker install.
+3. **Sign in to Tailscale** when prompted. Same Google or Microsoft account as your teammates.
+
+That's it. The dashboard opens, ready to deploy.
+
+> **Just here to view a teammate's app?** When you launch Hatch, pick the
+> "I'm just here to view a teammate's app" path on the welcome screen.
+> You'll only need to install Tailscale, not Docker.
 
 Hatch is a local-first deployment layer for vibe-coded internal tools. It runs a small daemon on your machine, exposes an MCP server to Claude Code, and gives you a desktop app to manage everything. Say "ship this to Sarah" — your app gets containerized, your teammates reach it over an encrypted peer-to-peer mesh, no cloud, no IT ticket.
 

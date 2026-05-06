@@ -80,6 +80,7 @@ func (s *Server) Router() http.Handler {
 		})
 
 		r.Get("/tailscale/status", s.handleTailscaleStatus)
+		r.Post("/tailscale/up", s.handleTailscaleUp)
 	})
 
 	// Web UI. The Vite build lands in daemon/web/dist via the build script.
@@ -441,6 +442,21 @@ func (s *Server) handleRevokeAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.db.LogAccess(app.ID, id.Email, "revoke", email)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleTailscaleUp triggers `tailscale up`. If the user isn't signed in,
+// Tailscale opens the auth URL in their browser and waits — the caller
+// should poll /tailscale/status to see when state goes Running.
+func (s *Server) handleTailscaleUp(w http.ResponseWriter, r *http.Request) {
+	if !s.ts.Installed() {
+		writeError(w, http.StatusServiceUnavailable, "tailscale CLI not installed")
+		return
+	}
+	if err := s.ts.Up(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) handleTailscaleStatus(w http.ResponseWriter, r *http.Request) {

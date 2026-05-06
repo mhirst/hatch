@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -16,12 +17,37 @@ type Client struct {
 	bin string
 }
 
+// New finds the Tailscale CLI. On Windows, Tailscale's installer doesn't
+// always add itself to PATH, so we also probe the default install locations.
+// macOS App Store installs put the CLI in a sandbox path that we cover too.
 func New() *Client {
-	bin, err := exec.LookPath("tailscale")
-	if err != nil {
-		bin = ""
+	if bin, err := exec.LookPath("tailscale"); err == nil {
+		return &Client{bin: bin}
 	}
-	return &Client{bin: bin}
+	for _, candidate := range fallbackPaths() {
+		if _, err := exec.LookPath(candidate); err == nil {
+			return &Client{bin: candidate}
+		}
+	}
+	return &Client{bin: ""}
+}
+
+func fallbackPaths() []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{
+			`C:\Program Files\Tailscale\tailscale.exe`,
+			`C:\Program Files (x86)\Tailscale\tailscale.exe`,
+		}
+	case "darwin":
+		return []string{
+			"/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+			"/usr/local/bin/tailscale",
+			"/opt/homebrew/bin/tailscale",
+		}
+	default:
+		return []string{"/usr/bin/tailscale", "/usr/local/bin/tailscale"}
+	}
 }
 
 func (c *Client) Installed() bool { return c.bin != "" }
@@ -91,6 +117,30 @@ func (c *Client) Funnel(ctx context.Context, port int) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// Up runs `tailscale up`, which brings the node online and triggers the
+// browser auth flow if the user isn't logged in. Returns once the command
+// has been kicked off — the auth itself happens in the user's browser and
+// the caller should poll Status() to know when it's complete.
+//
+// We intentionally don't pass any flags. Bare `tailscale up` is a no-op for
+// already-authenticated nodes (just brings the link up) and triggers auth
+// for new ones, which is the exact behavior we want.
+func (c *Client) Up(ctx context.Context) error {
+	if !c.Installed() {
+		return errors.New("tailscale CLI not installed")
+	}
+	// Don't capture stdout — `tailscale up` prints a URL and waits when not
+	// authed, and we want it to fire-and-forget. The user gets the auth URL
+	// via the Tailscale tray (or the OS opens it automatically).
+	cmd := exec.CommandContext(ctx, c.bin, "up")
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("tailscale up: %w", err)
+	}
+	// Don't Wait() — let the auth flow complete in the user's browser.
+	go func() { _ = cmd.Wait() }()
+	return nil
 }
 
 // SetServe binds a local port to the tailnet so peers in the org can reach it

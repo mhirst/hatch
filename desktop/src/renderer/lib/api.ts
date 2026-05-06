@@ -117,4 +117,5 @@ export const api = {
   revoke: (name: string, email: string) =>
     request("DELETE", `/apps/${name}/access/${email}`),
   tailscale: () => request<TailscaleStatus>("GET", "/tailscale/status"),
+  tailscaleUp: () => request<void>("POST", "/tailscale/up"),
 };

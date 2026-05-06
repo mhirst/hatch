@@ -18,6 +18,7 @@ import { LogViewer } from "./components/LogViewer";
 import { DeepLinkDeploy } from "./components/DeepLinkDeploy";
 import { Onboarding } from "./components/Onboarding";
 import { Invite } from "./components/Invite";
+import { Help } from "./components/Help";
 
 type View =
   | "loading"
@@ -26,7 +27,8 @@ type View =
   | "onboarding"
   | "dashboard"
   | "settings"
-  | "logs";
+  | "logs"
+  | "help";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -80,7 +82,7 @@ export default function App() {
 
   if (view === "loading") return <Splash>One moment.</Splash>;
 
-  const showNav = view === "dashboard" || view === "settings" || view === "logs";
+  const showNav = view === "dashboard" || view === "settings" || view === "logs" || view === "help";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -98,6 +100,7 @@ export default function App() {
         {view === "dashboard" && org && <Dashboard org={org} />}
         {view === "settings" && <Settings onClose={() => setView("dashboard")} />}
         {view === "logs" && <LogViewer onClose={() => setView("dashboard")} />}
+        {view === "help" && <Help onClose={() => setView("dashboard")} />}
       </main>
       <Footer />
       {pendingDeepLink && (
@@ -153,6 +156,11 @@ function Header({
         </button>
         {user && (
           <div className="flex items-center gap-4">
+            {showNav && (
+              <button onClick={() => onNavigate("help")} className="text-xs text-ash hover:text-paper">
+                Help
+              </button>
+            )}
             {showNav && window.hatch && (
               <>
                 <button onClick={() => onNavigate("logs")} className="text-xs text-ash hover:text-paper">
@@ -402,33 +410,59 @@ function Dashboard({ org: _org }: { org: Org }) {
 }
 
 function TailscaleBanner({ ts }: { ts: TailscaleStatus | null }) {
+  const [busy, setBusy] = useState(false);
+
   if (!ts) return null;
+
   if (!ts.installed) {
     return (
       <Card tone="raised" className="mb-6 border-vermilion/40">
-        <p className="text-sm text-paper-2">
-          Tailscale isn't installed. Apps will be reachable at{" "}
-          <Mono tone="paper">localhost</Mono> only until you{" "}
-          <a
-            href="https://tailscale.com/download"
-            className="underline text-cobalt hover:text-rose"
-          >
-            install it
-          </a>
-          .
+        <p className="text-sm text-paper-2 mb-3">
+          Tailscale isn't installed. Until it is, apps you deploy here are
+          reachable at <Mono tone="paper">localhost</Mono> only — your
+          teammates won't be able to open them.
         </p>
+        <Button
+          variant="cobalt"
+          onClick={() =>
+            window.hatch
+              ? window.hatch.shell.openExternal("https://tailscale.com/download")
+              : window.open("https://tailscale.com/download", "_blank", "noreferrer")
+          }
+        >
+          Install Tailscale
+        </Button>
       </Card>
     );
   }
+
   if (ts.state !== "Running") {
+    const needsLogin = ts.state === "NeedsLogin";
     return (
       <Card tone="raised" className="mb-6 border-mustard/40">
-        <p className="text-sm text-paper-2">
-          Tailscale is installed but not running ({ts.state}).
+        <p className="text-sm text-paper-2 mb-3">
+          {needsLogin
+            ? "Tailscale is installed but not signed in. Sharing won't work until you sign in."
+            : `Tailscale is installed but not running (${ts.state ?? "unknown"}).`}
         </p>
+        <Button
+          variant="cobalt"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await api.tailscaleUp();
+            } finally {
+              setTimeout(() => setBusy(false), 5000);
+            }
+          }}
+        >
+          {busy ? "Opening sign-in…" : "Sign in to Tailscale"}
+        </Button>
       </Card>
     );
   }
+
   return (
     <p className="text-xs text-ash mb-6">
       Tailnet · <Mono tone="paper">{ts.host}</Mono>
