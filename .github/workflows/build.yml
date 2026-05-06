@@ -36,7 +36,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 24 — GitHub deprecates the Node 20 runtime for actions in
+          # June 2026, so we pin forward now.
+          node-version: '24'
 
       - uses: actions/setup-go@v5
         with:

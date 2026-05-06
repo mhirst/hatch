@@ -1,6 +1,12 @@
 # Hatch
 
+[![latest release](https://img.shields.io/github/v/release/mhirst/hatch?label=release&color=3D52E2)](https://github.com/mhirst/hatch/releases/latest)
+[![build](https://img.shields.io/github/actions/workflow/status/mhirst/hatch/build.yml?branch=main&label=build)](https://github.com/mhirst/hatch/actions/workflows/build.yml)
+[![license](https://img.shields.io/github/license/mhirst/hatch?color=D4A82B)](LICENSE)
+
 > Ship the apps you build with Claude Code to your team — without leaving your laptop.
+
+**Download:** [latest installer for Windows / macOS](https://github.com/mhirst/hatch/releases/latest)
 
 Hatch is a local-first deployment layer for vibe-coded internal tools. It runs a small daemon on your machine, exposes an MCP server to Claude Code, and gives you a desktop app to manage everything. Say "ship this to Sarah" — your app gets containerized, your teammates reach it over an encrypted peer-to-peer mesh, no cloud, no IT ticket.
 
