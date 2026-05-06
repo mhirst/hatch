@@ -67,7 +67,7 @@ export default function App() {
         return;
       }
       // If Docker or Tailscale aren't ready, gate on the onboarding screen.
-      const h = (await api.health()) as { docker: boolean; tailscale: string };
+      const h = await api.health();
       if (!h.docker || h.tailscale !== "Running") {
         setView("onboarding");
       } else {
@@ -438,6 +438,10 @@ function TailscaleBanner({ ts }: { ts: TailscaleStatus | null }) {
 
 function AppRow({ app, onChanged }: { app: HatchApp; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
+  // Prefer the shareable tailnet URL when we have one; fall back to localhost
+  // so the operator at least has a working link on their own machine.
+  const url = app.tailnet_url || app.local_url;
+  const shareable = !!app.tailnet_url;
 
   return (
     <Card tone="raised" className="!p-5">
@@ -447,15 +451,20 @@ function AppRow({ app, onChanged }: { app: HatchApp; onChanged: () => void }) {
           <div className="flex items-baseline gap-3">
             <span className="font-medium text-paper">{app.name}</span>
             <span className="text-xs text-ash">{app.framework}</span>
+            {!shareable && app.local_url && (
+              <span className="text-[10px] uppercase tracking-tight text-mustard">
+                local only
+              </span>
+            )}
           </div>
-          {app.tailnet_url && (
+          {url && (
             <a
-              href={app.tailnet_url}
+              href={url}
               target="_blank"
               rel="noreferrer"
               className="text-xs text-ash hover:text-cobalt truncate block"
             >
-              {app.tailnet_url}
+              {url}
             </a>
           )}
         </div>

@@ -5,10 +5,21 @@
  * could add an SSE endpoint on the daemon to stream logs in-window — slated
  * for a later session.
  */
+import { useEffect, useState } from "react";
 import { Button, Card, Mono, Shapes } from "./ui";
 
 export function LogViewer({ onClose }: { onClose: () => void }) {
   const bridge = window.hatch;
+  const [logsDir, setLogsDir] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bridge) return;
+    bridge.settings
+      .get()
+      .then((raw) => setLogsDir((raw as { logsDir?: string }).logsDir ?? null))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-8">
       <div className="flex items-baseline justify-between">
@@ -21,8 +32,10 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 
       <Card tone="raised">
         <p className="text-sm text-paper-2 mb-4">
-          Hatch writes daemon logs to <Mono tone="paper">~/Library/Application Support/Hatch/logs/</Mono>{" "}
-          on macOS, or <Mono tone="paper">%APPDATA%\Hatch\logs\</Mono> on Windows.
+          Hatch writes daemon stdout/stderr to:
+        </p>
+        <p className="text-sm text-paper mb-4">
+          <Mono tone="paper">{logsDir ?? "(loading…)"}</Mono>
         </p>
         <div className="flex gap-3">
           <Button variant="cobalt" onClick={() => bridge?.shell.openLogs()}>

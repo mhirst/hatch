@@ -10,14 +10,8 @@
  * status. The user is never asked to run a command.
  */
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
-import { Button, Card, HeroShape, Hairline, Mono } from "./ui";
-
-interface Health {
-  ok: boolean;
-  docker: boolean;
-  tailscale: string;
-}
+import { api, type Health } from "../lib/api";
+import { Button, Card, HeroShape, Hairline } from "./ui";
 
 type DockerState = "ok" | "missing" | "stopped";
 type TailscaleState = "ok" | "missing" | "needs-login" | "stopped";
@@ -49,7 +43,7 @@ export function Onboarding({ onReady }: { onReady: () => void }) {
     async function tick() {
       if (stopped) return;
       try {
-        const h = (await api.health()) as Health;
+        const h = await api.health();
         const s = classify(h);
         setStatus(s);
         if (s.docker === "ok" && s.tailscale === "ok") {

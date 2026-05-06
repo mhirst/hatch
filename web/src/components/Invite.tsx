@@ -28,6 +28,12 @@ export function Invite({ app, tailnetHost, onClose }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);
 
+  // The daemon now sets `tailnet_url` only when Tailscale Serve has actually
+  // published the app. If it's empty, the invite will end up pointing at
+  // localhost (which works on the operator's machine only), so we warn first.
+  const shareableUrl = !!app.tailnet_url;
+  const inviteUrl = app.tailnet_url || app.local_url || `http://localhost:${app.port ?? 0}`;
+
   async function generate() {
     if (!email.trim()) return;
     setBusy(true);
@@ -37,10 +43,9 @@ export function Invite({ app, tailnetHost, onClose }: Props) {
       await api.share(app.name, email.trim());
       const html = renderInviteHtml({
         appName: app.name,
-        tailnetUrl: app.tailnet_url ?? `http://localhost:${app.port}`,
+        tailnetUrl: inviteUrl,
         tailnetHost: tailnetHost ?? "your-tailnet",
         teammateEmail: email.trim(),
-        ownerEmail: "the operator",
       });
       setGenerated(html);
     } catch (e) {
@@ -56,7 +61,7 @@ export function Invite({ app, tailnetHost, onClose }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hatch-invite-${app.name}-${email.split("@")[0]}.html`;
+    a.download = inviteFilename(app.name, email);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -91,6 +96,15 @@ export function Invite({ app, tailnetHost, onClose }: Props) {
             />
           </div>
         </div>
+
+        {!shareableUrl && (
+          <p className="text-sm text-mustard mb-3">
+            Heads up: this app hasn't been published to your tailnet yet, so
+            the invite will link to <Mono tone="paper">{inviteUrl}</Mono> —
+            which only works from your laptop. Re-deploy after Tailscale is
+            running, or the recipient will see a broken link.
+          </p>
+        )}
 
         {err && <p className="text-sm text-vermilion mb-3">{err}</p>}
 
@@ -128,7 +142,18 @@ interface InviteParams {
   tailnetUrl: string;
   tailnetHost: string;
   teammateEmail: string;
-  ownerEmail: string;
+}
+
+// Build a safe filename from app name + email local-part. Both are largely
+// kebab-case in practice, but a teammate's email might be `alex.foo+plus@x`
+// and we don't want raw `+` or `.` showing up in download filenames.
+function inviteFilename(appName: string, email: string): string {
+  const local = (email.split("@")[0] ?? "teammate")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32) || "teammate";
+  return `hatch-invite-${appName}-${local}.html`;
 }
 
 /**
@@ -138,7 +163,10 @@ interface InviteParams {
  * loads from the user's email client; system serif is a safe fallback.
  */
 function renderInviteHtml(p: InviteParams): string {
-  const appUrl = encodeAttr(p.tailnetUrl);
+  // All values originate from the operator (their tailnet, their app name,
+  // teammate email they typed). escapeHtml is sufficient because every
+  // interpolation site is either a text node or a double-quoted attribute.
+  const appUrl = escapeHtml(p.tailnetUrl);
   const appName = escapeHtml(p.appName);
   const tailnetHost = escapeHtml(p.tailnetHost);
 
@@ -273,8 +301,4 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-}
-
-function encodeAttr(s: string): string {
-  return escapeHtml(s);
 }

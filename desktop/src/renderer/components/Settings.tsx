@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Hairline, Input, Label, Mono, Shapes } from "./ui";
 
-interface HatchSettings {
+interface SettingsView {
   autoStart: boolean;
   daemonPort: number;
   notifyOnAccess: boolean;
@@ -14,15 +14,21 @@ interface HatchSettings {
   logsDir: string;
 }
 
+// Only these fields are actually writable from the renderer; the rest of
+// SettingsView is read-only (app version, resolved daemon URL, log dir).
+type WritableSettings = Pick<SettingsView, "autoStart" | "daemonPort" | "notifyOnAccess">;
+
 export function Settings({ onClose }: { onClose: () => void }) {
   const bridge = window.hatch;
-  const [s, setS] = useState<HatchSettings | null>(null);
+  const [s, setS] = useState<SettingsView | null>(null);
   const [port, setPort] = useState("");
+  const [portError, setPortError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!bridge) return;
-    bridge.settings.get().then((v) => {
+    bridge.settings.get().then((raw) => {
+      const v = raw as SettingsView;
       setS(v);
       setPort(String(v.daemonPort));
     });
@@ -42,7 +48,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   }
   if (!s) return <p className="text-ash text-sm">Loading…</p>;
 
-  async function setFlag(patch: Partial<HatchSettings>) {
+  async function setFlag(patch: Partial<WritableSettings>) {
     await bridge!.settings.set(patch);
     setS({ ...s!, ...patch });
     setDirty(true);
@@ -50,7 +56,11 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   async function savePort() {
     const n = Number(port);
-    if (!Number.isInteger(n) || n < 1024 || n > 65535) return;
+    if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+      setPortError("Port must be an integer between 1024 and 65535.");
+      return;
+    }
+    setPortError(null);
     await bridge!.settings.set({ daemonPort: n });
     setS({ ...s!, daemonPort: n });
     setDirty(true);
@@ -102,10 +112,18 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div className="flex items-end gap-3 mb-3">
           <div className="flex-1">
             <Label>Port</Label>
-            <Input value={port} onChange={(e) => setPort(e.target.value)} placeholder="4592" />
+            <Input
+              value={port}
+              onChange={(e) => {
+                setPort(e.target.value);
+                if (portError) setPortError(null);
+              }}
+              placeholder="4592"
+            />
           </div>
           <Button variant="cobalt" onClick={savePort}>Save</Button>
         </div>
+        {portError && <p className="text-sm text-vermilion mb-2">{portError}</p>}
         <p className="text-xs text-ash">
           URL: <Mono tone="paper">{s.daemonUrl}</Mono>
         </p>
@@ -131,7 +149,8 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       onClick={() => onChange(!on)}
       className={`relative h-6 w-11 rounded-pill transition-colors ${on ? "bg-cobalt" : "bg-ink-3"}`}
-      aria-pressed={on}
+      role="switch"
+      aria-checked={on}
     >
       <span
         className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper transition-transform ${

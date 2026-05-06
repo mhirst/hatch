@@ -237,27 +237,34 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 
 	dockerfile := det.DockerPath
 	if !det.HasDocker {
-		body, err := det.Dockerfile()
+		// Note: this `body` is a string (the generated Dockerfile contents)
+		// — different from the outer `body deployRequest`. We could shadow
+		// safely because Go scopes it to this if-block, but for clarity we
+		// give it a distinct name.
+		dockerfileBody, err := det.Dockerfile()
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		generated := filepath.Join(abs, "Dockerfile.hatch")
-		if err := os.WriteFile(generated, []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(generated, []byte(dockerfileBody), 0o644); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		dockerfile = generated
 	}
 
-	tag := fmt.Sprintf("hatch/%s:%s", body.Name, shortHash())
+	tag := fmt.Sprintf("hatch/%s:%s", body.Name, imageTagSuffix())
 	if err := s.docker.Build(r.Context(), abs, dockerfile, tag); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	containerName := fmt.Sprintf("hatch-%s", body.Name)
-	// If a previous container exists, replace it.
+	// Best-effort stop of the previous container. We ignore errors because
+	// docker.Run also force-removes any container squatting on `containerName`
+	// (see docker.Client.Run); this call is just a fast-path so the user
+	// doesn't see the orphan container linger between build + run.
 	if existing, err := s.db.GetAppByName(org.ID, body.Name); err == nil && existing.ContainerID != "" {
 		_ = s.docker.Stop(r.Context(), existing.ContainerID)
 	}
@@ -268,10 +275,18 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tailnetURL := fmt.Sprintf("http://localhost:%d", hostPort)
+	// Always-true URL for the operator's machine. Stored separately from
+	// tailnet_url so the renderer can distinguish "this app exists locally"
+	// from "this app is shareable with teammates".
+	localURL := fmt.Sprintf("http://localhost:%d", hostPort)
+
+	// Best-effort: try to publish via Tailscale Serve. If it fails (no
+	// Tailscale, not running, serve config rejected), tailnet_url stays
+	// empty and the UI will tell the operator the app isn't shareable yet.
+	tailnetURL := ""
 	if s.ts.Installed() {
 		if err := s.ts.SetServe(r.Context(), "/"+body.Name, hostPort); err == nil {
-			if host, err := s.ts.FundamentalHost(r.Context()); err == nil {
+			if host, err := s.ts.FundamentalHost(r.Context()); err == nil && host != "" {
 				tailnetURL = fmt.Sprintf("https://%s/%s", host, body.Name)
 			}
 		}
@@ -287,6 +302,7 @@ func (s *Server) handleDeployApp(w http.ResponseWriter, r *http.Request) {
 		Port:        hostPort,
 		ContainerID: containerID,
 		Status:      "running",
+		LocalURL:    localURL,
 		TailnetURL:  tailnetURL,
 	}
 	if existing, err := s.db.GetAppByName(org.ID, body.Name); err == nil {
@@ -549,6 +565,10 @@ func sanitizeName(s string) string {
 	return strings.Trim(string(out), "-")
 }
 
-func shortHash() string {
+// imageTagSuffix returns a short, unique suffix for Docker image tags.
+// We use a UUID prefix rather than a content hash because we don't actually
+// need cache-busting (Docker layer caching takes care of that); we just need
+// uniqueness per-build for human-readable `docker images` output.
+func imageTagSuffix() string {
 	return uuid.NewString()[:8]
 }

@@ -111,6 +111,14 @@ var migrations = []string{
 	DROP TABLE apps;
 	ALTER TABLE apps_new RENAME TO apps;
 	PRAGMA foreign_keys=on;`,
+	// 3: split tailnet_url into local_url + tailnet_url. The previous schema
+	// stuffed `http://localhost:NNNN` into tailnet_url whenever Tailscale Serve
+	// hadn't published the app, which made the UI think the app was shareable
+	// when it wasn't. Now: local_url is the always-present 127.0.0.1 form,
+	// tailnet_url is empty until Serve actually publishes.
+	`ALTER TABLE apps ADD COLUMN local_url TEXT;
+	UPDATE apps SET local_url = tailnet_url WHERE tailnet_url LIKE 'http://localhost:%' OR tailnet_url LIKE 'http://127.0.0.1:%';
+	UPDATE apps SET tailnet_url = '' WHERE tailnet_url LIKE 'http://localhost:%' OR tailnet_url LIKE 'http://127.0.0.1:%';`,
 }
 
 func (db *DB) migrate() error {
@@ -156,9 +164,16 @@ type App struct {
 	Port        int    `json:"port,omitempty"`
 	ContainerID string `json:"container_id,omitempty"`
 	Status      string `json:"status"`
-	TailnetURL  string `json:"tailnet_url,omitempty"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	// LocalURL is always set after a successful deploy — it points at the
+	// Docker port mapping on 127.0.0.1 and only works on the operator's
+	// machine.
+	LocalURL string `json:"local_url,omitempty"`
+	// TailnetURL is only set when Tailscale Serve has actually published
+	// the app. Empty until then; the renderer keys "this app is shareable"
+	// off the presence of this field.
+	TailnetURL string `json:"tailnet_url,omitempty"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
 }
 
 type Access struct {
@@ -209,38 +224,39 @@ func (db *DB) UpsertApp(a *App) error {
 	}
 	a.UpdatedAt = now
 	_, err := db.sql.Exec(`
-		INSERT INTO apps (id, org_id, owner_id, name, source_path, framework, port, container_id, status, tailnet_url, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO apps (id, org_id, owner_id, name, source_path, framework, port, container_id, status, local_url, tailnet_url, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			source_path = excluded.source_path,
 			framework = excluded.framework,
 			port = excluded.port,
 			container_id = excluded.container_id,
 			status = excluded.status,
+			local_url = excluded.local_url,
 			tailnet_url = excluded.tailnet_url,
 			updated_at = excluded.updated_at
 	`, a.ID, a.OrgID, a.OwnerID, a.Name, a.SourcePath, a.Framework, a.Port,
-		a.ContainerID, a.Status, a.TailnetURL, a.CreatedAt, a.UpdatedAt)
+		a.ContainerID, a.Status, a.LocalURL, a.TailnetURL, a.CreatedAt, a.UpdatedAt)
 	return err
 }
 
 func (db *DB) GetAppByName(orgID, name string) (*App, error) {
 	row := db.sql.QueryRow(`
-		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, tailnet_url, created_at, updated_at
+		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, local_url, tailnet_url, created_at, updated_at
 		FROM apps WHERE org_id = ? AND name = ?`, orgID, name)
 	return scanApp(row)
 }
 
 func (db *DB) GetApp(id string) (*App, error) {
 	row := db.sql.QueryRow(`
-		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, tailnet_url, created_at, updated_at
+		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, local_url, tailnet_url, created_at, updated_at
 		FROM apps WHERE id = ?`, id)
 	return scanApp(row)
 }
 
 func (db *DB) ListApps(orgID string) ([]App, error) {
 	rows, err := db.sql.Query(`
-		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, tailnet_url, created_at, updated_at
+		SELECT id, org_id, owner_id, name, source_path, framework, port, container_id, status, local_url, tailnet_url, created_at, updated_at
 		FROM apps WHERE org_id = ? ORDER BY updated_at DESC`, orgID)
 	if err != nil {
 		return nil, err
@@ -309,10 +325,10 @@ type rowScanner interface {
 
 func scanApp(r rowScanner) (*App, error) {
 	var a App
-	var framework, containerID, tailnetURL sql.NullString
+	var framework, containerID, localURL, tailnetURL sql.NullString
 	var port sql.NullInt64
 	if err := r.Scan(&a.ID, &a.OrgID, &a.OwnerID, &a.Name, &a.SourcePath,
-		&framework, &port, &containerID, &a.Status, &tailnetURL,
+		&framework, &port, &containerID, &a.Status, &localURL, &tailnetURL,
 		&a.CreatedAt, &a.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -321,6 +337,7 @@ func scanApp(r rowScanner) (*App, error) {
 	}
 	a.Framework = framework.String
 	a.ContainerID = containerID.String
+	a.LocalURL = localURL.String
 	a.TailnetURL = tailnetURL.String
 	if port.Valid {
 		a.Port = int(port.Int64)

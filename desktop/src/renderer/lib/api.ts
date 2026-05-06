@@ -7,6 +7,9 @@ export interface App {
   status: string;
   port?: number;
   source_path: string;
+  /** http://localhost:NNNN — always present after a successful deploy. Only the operator can reach this. */
+  local_url?: string;
+  /** https://<machine>.<tailnet>.ts.net/<name> — only present once Tailscale Serve has published. */
   tailnet_url?: string;
   created_at: number;
   updated_at: number;
@@ -31,6 +34,14 @@ export interface TailscaleStatus {
   host?: string;
   hostname?: string;
   ips?: string[];
+}
+
+export interface Health {
+  ok: boolean;
+  docker: boolean;
+  /** Tailscale BackendState — "Running", "NeedsLogin", "Stopped", or "unavailable". */
+  tailscale: string;
+  auth: { firebase: boolean };
 }
 
 /**
@@ -89,7 +100,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  health: () => request("GET", "/health"),
+  health: () => request<Health>("GET", "/health"),
   me: () => request("GET", "/me"),
   org: () => request<Org | null>("GET", "/org"),
   createOrg: (name: string, tailnet: string) =>
