@@ -4,9 +4,12 @@ You have a working installer. Here's how to actually try it with someone.
 
 ## What you'll send them
 
-Two files:
+Two things:
 
-1. **`Hatch Setup 0.1.0.exe`** (Windows) or **`Hatch-0.1.0.dmg`** (macOS) — the installer itself, ~94 MB. Lives in `desktop/dist/` after `npm run package:win` or `:mac`.
+1. **A link to the latest installer** — point them at https://github.com/mhirst/hatch/releases/latest. They pick the right file for their OS:
+   - Windows: `Hatch-Setup-X.Y.Z.exe`
+   - Mac (Apple Silicon): `Hatch-X.Y.Z-arm64.dmg`
+   - Mac (Intel): `Hatch-X.Y.Z.dmg`
 2. **An invite page** — a single self-contained HTML file you generate inside Hatch ("Invite" button on any deployed app). It has the Tailscale download link, your tailnet name, and the URL to your app.
 
 Send both via DM, email, AirDrop, or a shared drive. The teammate doesn't need any of the source.

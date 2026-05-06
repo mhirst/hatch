@@ -158,7 +158,7 @@ const tools = [
 // ─── server ─────────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: "hatch-mcp", version: "0.1.0" },
+  { name: "hatch-mcp", version: "0.2.0" },
   { capabilities: { tools: {} } },
 );
 

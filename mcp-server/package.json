@@ -1,6 +1,6 @@
 {
   "name": "@hatch/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Hatch — lets Claude Code deploy local apps to your team via the Hatch daemon.",
   "type": "module",
   "main": "dist/server.js",

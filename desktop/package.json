@@ -1,7 +1,7 @@
 {
   "name": "hatch-desktop",
   "productName": "Hatch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ship the apps you build with Claude Code to your team — locally, securely, no cloud.",
   "author": {
     "name": "Hatch",
